@@ -131,7 +131,8 @@ const openCartBtn = document.getElementById('open-cart-btn');
 if (openCartBtn && cartWrapper) {
   openCartBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    cartWrapper.style.display = cartWrapper.style.display === 'none' ? 'block' : 'none';
+    cartWrapper.style.display = cartWrapper.style.display === 'none' ? 'flex' : 'none';
+    cartWrapper.style.flexDirection = 'column';
   });
 }
 
