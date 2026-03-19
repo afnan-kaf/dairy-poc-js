@@ -25,21 +25,27 @@ async function checkUser() {
   }
 }
 
-const authSubmitBtn = document.getElementById('auth-submit');
+// Using Event Delegation to bypass DOM loading race conditions
+document.addEventListener('click', async (e) => {
+  // Check if what was clicked (or its parent) is the auth-submit button
+  const authSubmitBtn = e.target.closest('#auth-submit');
 
-// DEBUGGING: Check if the JS actually finds the button
-if (!authSubmitBtn) {
-  console.error("CRITICAL: Could not find the button with ID 'auth-submit'. Check Webflow IDs.");
-} else {
-  console.log("Success: Found auth-submit button. Attaching listener.");
-  
-  authSubmitBtn.addEventListener('click', async (e) => {
+  if (authSubmitBtn) {
     e.preventDefault(); // Stop the white blank page!
-    console.log("Submit button clicked, intercepting form...");
+    console.log("Success: Intercepted the auth-submit click!");
 
-    const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
+    const emailInput = document.getElementById('auth-email');
+    const passwordInput = document.getElementById('auth-password');
     const errorMsg = document.getElementById('auth-error-message');
+
+    // Ensure inputs exist before trying to grab their values
+    if (!emailInput || !passwordInput) {
+      console.error("Could not find email or password inputs. Check their IDs.");
+      return;
+    }
+
+    const email = emailInput.value;
+    const password = passwordInput.value;
 
     let { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
@@ -62,8 +68,8 @@ if (!authSubmitBtn) {
       alert("Authentication successful!");
       window.location.reload(); 
     }
-  });
-}
+  }
+});
 
 // ==========================================
 // 3. CART LOGIC
