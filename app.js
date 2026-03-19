@@ -1,7 +1,7 @@
 // ==========================================
 // 1. SUPABASE INITIALIZATION (MODERN API)
 // ==========================================
-const supabaseUrl = 'https://supabase.com/dashboard/project/gvlpmnekkxxorunlyarp';
+const supabaseUrl = 'https://gvlpmnekkxxorunlyarp.supabase.co';
 // Replace with your new key starting with sb_publishable_
 const supabasePublishableKey = 'sb_publishable_ELOwH65FeZdryAuTolif5g_ftxO_Xrf'; 
 
