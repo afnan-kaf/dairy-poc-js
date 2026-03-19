@@ -20,24 +20,27 @@ async function checkUser() {
   currentUser = session ? session.user : null;
   console.log("Current User:", currentUser ? currentUser.email : "Guest");
   
-  // If logged in, we should theoretically fetch the cart from the DB here
-  // For this PoC, we will just sync the local cart to the DB
   if (currentUser && cart.length > 0) {
     syncCartToDB();
   }
 }
 
-// Handle Login / Signup
 const authSubmitBtn = document.getElementById('auth-submit');
-if (authSubmitBtn) {
+
+// DEBUGGING: Check if the JS actually finds the button
+if (!authSubmitBtn) {
+  console.error("CRITICAL: Could not find the button with ID 'auth-submit'. Check Webflow IDs.");
+} else {
+  console.log("Success: Found auth-submit button. Attaching listener.");
+  
   authSubmitBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Stop the white blank page!
+    console.log("Submit button clicked, intercepting form...");
+
     const email = document.getElementById('auth-email').value;
     const password = document.getElementById('auth-password').value;
-    const errorMsg = document.getElementById('auth-error-message'); // Optional
+    const errorMsg = document.getElementById('auth-error-message');
 
-    // For PoC, let's just try to log in. If it fails due to no user, we sign them up.
-    // In a production app, you'd separate these tabs.
     let { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error && error.message.includes('Invalid login credentials')) {
@@ -53,9 +56,11 @@ if (authSubmitBtn) {
     } else {
       console.log("Auth Success!", data.user.email);
       currentUser = data.user;
-      if (errorMsg) errorMsg.innerText = "Success! You are logged in.";
-      // Sync any guest cart items to the database now that they are logged in
-      syncCartToDB();
+      
+      // Sync cart and REDIRECT (reload the page to show logged-in state)
+      await syncCartToDB();
+      alert("Authentication successful!");
+      window.location.reload(); 
     }
   });
 }
