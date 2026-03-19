@@ -1,5 +1,5 @@
 // ==========================================
-// 1. SUPABASE INITIALIZATION (MODERN API)
+// 1. SUPABASE INITIALIZATION
 // ==========================================
 const supabaseUrl = 'https://gvlpmnekkxxorunlyarp.supabase.co';
 const supabasePublishableKey = 'sb_publishable_ELOwH65FeZdryAuTolif5g_ftxO_Xrf'; 
@@ -11,64 +11,97 @@ let currentUser = null;
 let cart = JSON.parse(localStorage.getItem('dairy_cart')) || [];
 
 // ==========================================
-// 2. AUTHENTICATION & GLOBAL CLICK LISTENER
+// 2. SESSION & COOKIE MANAGEMENT
 // ==========================================
+// Sets a cookie that your Cloudflare Worker can read to protect /dashboard
+function setAuthCookie() {
+  document.cookie = "sb-session=1; path=/; max-age=31536000; Secure; SameSite=Lax";
+}
+
+function clearAuthCookie() {
+  document.cookie = "sb-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+}
+
 async function checkUser() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   currentUser = session ? session.user : null;
   console.log("Current User:", currentUser ? currentUser.email : "Guest");
   
-  if (currentUser && cart.length > 0) {
-    syncCartToDB();
+  if (currentUser) {
+    // If they clicked the verification email link, they arrive back on the site with a session.
+    // We must set the cookie here so the Worker knows they are allowed in.
+    setAuthCookie();
+    
+    if (cart.length > 0) {
+      syncCartToDB();
+    }
+  } else {
+    clearAuthCookie();
   }
 }
 
-// We use one massive Event Listener to handle all clicks safely (Auth, Add to Cart, Open Cart)
-document.addEventListener('click', async (e) => {
+// ==========================================
+// 3. AUTHENTICATION (FORM SUBMITS)
+// ==========================================
+document.addEventListener('submit', async (e) => {
   
-  // --- AUTHENTICATION SUBMIT INTERCEPT ---
-  const authSubmitBtn = e.target.closest('#auth-submit');
-  if (authSubmitBtn) {
+  // --- SIGN UP FLOW ---
+  if (e.target.closest('#signup-form')) {
     e.preventDefault(); 
-    console.log("Success: Intercepted the auth-submit click!");
-
-    const emailInput = document.getElementById('auth-email');
-    const passwordInput = document.getElementById('auth-password');
-    const errorMsg = document.getElementById('auth-error-message');
-
-    if (!emailInput || !passwordInput) {
-      console.error("Could not find email or password inputs. Check their IDs.");
-      return;
-    }
-
-    const email = emailInput.value;
-    const password = passwordInput.value;
-
-    let { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const form = e.target;
+    // We look inside the specific form for inputs of type email/password
+    const email = form.querySelector('input[type="email"]').value;
+    const password = form.querySelector('input[type="password"]').value;
     
-    if (error && error.message.includes('Invalid login credentials')) {
-      console.log("User not found, attempting sign up...");
-      const signUpRes = await supabaseClient.auth.signUp({ email, password });
-      data = signUpRes.data;
-      error = signUpRes.error;
-    }
+    // Disable button to prevent double clicks
+    const submitBtn = form.querySelector('input[type="submit"], button[type="submit"]');
+    if(submitBtn) submitBtn.value = "Sending...";
 
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+    
     if (error) {
-      console.error("Auth Error:", error.message);
-      if (errorMsg) {
-        errorMsg.innerText = error.message;
-      } else {
-        alert("Supabase Error: " + error.message); 
-      }
+      console.error("Sign Up Error:", error.message);
+      alert("Error: " + error.message);
+      if(submitBtn) submitBtn.value = "Sign Up";
     } else {
-      console.log("Auth Success!", data.user.email);
-      currentUser = data.user;
-      await syncCartToDB();
-      alert("Authentication successful!");
-      window.location.reload(); 
+      // With SMTP verification ON, they must check their email.
+      alert("Success! Please check your email to verify your account before logging in.");
+      form.reset();
+      if(submitBtn) submitBtn.value = "Sign Up";
     }
   }
 
+  // --- SIGN IN FLOW ---
+  if (e.target.closest('#login-form')) {
+    e.preventDefault();
+    const form = e.target;
+    const email = form.querySelector('input[type="email"]').value;
+    const password = form.querySelector('input[type="password"]').value;
+    
+    const submitBtn = form.querySelector('input[type="submit"], button[type="submit"]');
+    if(submitBtn) submitBtn.value = "Logging in...";
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    
+    if (error) {
+      console.error("Sign In Error:", error.message);
+      alert("Error: " + error.message);
+      if(submitBtn) submitBtn.value = "Log In";
+    } else {
+      currentUser = data.user;
+      setAuthCookie(); // Tell Cloudflare Worker they are allowed in
+      await syncCartToDB();
+      window.location.href = '/dashboard'; // Redirect to protected route
+    }
+  }
+});
+
+
+// ==========================================
+// 4. E-COMMERCE & CART LOGIC (CLICKS)
+// ==========================================
+document.addEventListener('click', async (e) => {
+  
   // --- ADD TO CART INTERCEPT ---
   const addBtn = e.target.closest('[data-product-id]');
   if (addBtn && !e.target.closest('#cart-wrapper')) { 
@@ -95,9 +128,6 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ==========================================
-// 3. CART DATA LOGIC
-// ==========================================
 function addToCart(product) {
   const existingItem = cart.find(item => item.id === product.id);
   if (existingItem) {
@@ -133,9 +163,6 @@ async function syncCartToDB() {
   if (error) console.error("Error syncing cart to DB:", error.message);
 }
 
-// ==========================================
-// 4. CART UI RENDERING
-// ==========================================
 function updateCartUI() {
   const container = document.getElementById('cart-items-container');
   const subtotalEl = document.getElementById('cart-subtotal-price');
