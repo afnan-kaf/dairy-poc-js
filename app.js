@@ -34,6 +34,25 @@ async function checkUser() {
 }
 
 // ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+function getByAttr(attr, value) {
+  return document.querySelector(`[${attr}="${value}"]`);
+}
+
+function showMessage(msgEl, text) {
+  if (!msgEl) return;
+  msgEl.innerText = text;
+  msgEl.style.visibility = 'visible';
+}
+
+function hideMessage(msgEl) {
+  if (!msgEl) return;
+  msgEl.style.visibility = 'hidden';
+  msgEl.innerText = '';
+}
+
+// ==========================================
 // 3. AUTHENTICATION (FORM SUBMITS)
 // ==========================================
 document.addEventListener('submit', async (e) => {
@@ -47,16 +66,18 @@ document.addEventListener('submit', async (e) => {
     const email = form.querySelector('input[type="email"]').value;
     const password = form.querySelector('input[type="password"]').value;
 
+    const btnTextEl = getByAttr('btn-attribute', 'signup');
+    const msgEl = getByAttr('message', 'signup');
+    const originalBtnText = btnTextEl ? btnTextEl.innerText : '';
+
+    hideMessage(msgEl);
+
     if (!fullName || !email || !password) {
-      alert("Please fill in all fields.");
+      showMessage(msgEl, "Please fill in all fields.");
       return;
     }
 
-    const submitBtn = form.querySelector('button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.innerText = "Creating...";
-    }
+    if (btnTextEl) btnTextEl.innerText = "Creating...";
 
     const { data, error } = await supabaseClient.auth.signUp({
       email,
@@ -68,15 +89,17 @@ document.addEventListener('submit', async (e) => {
     });
 
     if (error) {
-      alert("Error: " + error.message);
+      if (btnTextEl) btnTextEl.innerText = originalBtnText;
+      showMessage(msgEl, "Error: " + error.message);
     } else {
-      alert("Success! Please check your email to verify your account.");
+      if (btnTextEl) btnTextEl.innerText = originalBtnText;
       form.reset();
-    }
-
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerText = "Create Account";
+      showMessage(msgEl, "✅ Success! Please check your email to verify your account.");
+      // Hide message just before redirect
+      setTimeout(() => {
+        hideMessage(msgEl);
+        window.location.href = '/login';
+      }, 3000);
     }
     return;
   }
@@ -89,25 +112,29 @@ document.addEventListener('submit', async (e) => {
     const email = form.querySelector('input[type="email"]').value;
     const password = form.querySelector('input[type="password"]').value;
 
-    const submitBtn = form.querySelector('button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.innerText = "Logging in...";
-    }
+    const btnTextEl = getByAttr('btn-attribute', 'login');
+    const msgEl = getByAttr('message', 'login');
+    const originalBtnText = btnTextEl ? btnTextEl.innerText : '';
+
+    hideMessage(msgEl);
+
+    if (btnTextEl) btnTextEl.innerText = "Logging in...";
 
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
     if (error) {
-      alert("Error: " + error.message);
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.innerText = "Log In";
-      }
+      if (btnTextEl) btnTextEl.innerText = originalBtnText;
+      showMessage(msgEl, "Error: " + error.message);
     } else {
+      if (btnTextEl) btnTextEl.innerText = originalBtnText;
+      showMessage(msgEl, "✅ Login successful! Redirecting...");
       currentUser = data.user;
       setAuthCookie();
       await syncCartToDB();
-      window.location.href = '/dashboard';
+      setTimeout(() => {
+        hideMessage(msgEl);
+        window.location.href = '/dashboard';
+      }, 1500);
     }
     return;
   }
