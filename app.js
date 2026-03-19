@@ -54,22 +54,35 @@ document.addEventListener('submit', async (e) => {
     const password = form.querySelector('input[type="password"]').value;
     
     // Disable button to prevent double clicks
-    const submitBtn = form.querySelector('input[type="submit"], button[type="submit"]');
-    if(submitBtn) submitBtn.value = "Sending...";
+    const submitBtn = e.target.closest('#auth-submit');
+    if (submitBtn) {
+      e.preventDefault();
+      const email = document.querySelector('#auth-email').value;
+      const password = document.querySelector('#auth-password').value;
+      const fullName = document.querySelector('#full-name').value; // ← add this
 
-    const { data, error } = await supabaseClient.auth.signUp({ email, password });
-    
-    if (error) {
-      console.error("Sign Up Error:", error.message);
-      alert("Error: " + error.message);
-      if(submitBtn) submitBtn.value = "Sign Up";
-    } else {
-      // With SMTP verification ON, they must check their email.
-      alert("Success! Please check your email to verify your account before logging in.");
-      form.reset();
-      if(submitBtn) submitBtn.value = "Sign Up";
-    }
+      if (!email || !password || !fullName) {
+        alert("Please fill in all fields.");
+        return;
+      }
+      submitBtn.disabled = true;
+
+    const { data, error } = await supabaseClient.auth.signUp({
+      email, password,
+      options: {
+        data: {full_name: fullName},
+        emailRedirectTo: 'https://dairy-poc-proxy.afnandeyekaf.workers.dev/login' // ← after verify, goes to login page
+        }
+    });
+
+  if (error) {
+    alert("Error: " + error.message);
+    submitBtn.disabled = false;
+  } else {
+    alert("Success! Please check your email to verify your account.");
+    submitBtn.disabled = false;
   }
+}
 
   // --- SIGN IN FLOW ---
   if (e.target.closest('#login-form')) {
