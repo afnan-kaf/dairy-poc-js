@@ -461,23 +461,23 @@ function updateCartUI() {
     const decBtn = clone.querySelector('[product-quantity-decrease]');
     if (decBtn) decBtn.setAttribute('product-quantity-decrease', item.id);
 
-    // FIX HOVER: Webflow IX2 doesn't fire on cloned nodes.
-    // Manually replicate the show/hide behavior on cart_item_name_wrap hover.
+    // Fade in/out the remove button (cart_item_cross_wrap) on cart_item_name_wrap hover
     const nameWrap = clone.querySelector('.cart_item_name_wrap');
-    if (nameWrap && rmBtn) {
-      // Start hidden
-      rmBtn.style.transition = 'opacity 0.2s ease';
-      rmBtn.style.opacity = '0';
-      rmBtn.style.pointerEvents = 'none';
+    const crossWrap = clone.querySelector('.cart_item_cross_wrap');
+    if (nameWrap && crossWrap) {
+      // Initial hidden state
+      crossWrap.style.opacity = '0';
+      crossWrap.style.pointerEvents = 'none';
+      crossWrap.style.transition = 'opacity 0.25s ease';
 
       nameWrap.addEventListener('mouseenter', () => {
-        rmBtn.style.opacity = '1';
-        rmBtn.style.pointerEvents = 'auto';
+        crossWrap.style.opacity = '1';
+        crossWrap.style.pointerEvents = 'auto';
       });
 
       nameWrap.addEventListener('mouseleave', () => {
-        rmBtn.style.opacity = '0';
-        rmBtn.style.pointerEvents = 'none';
+        crossWrap.style.opacity = '0';
+        crossWrap.style.pointerEvents = 'none';
       });
     }
 
