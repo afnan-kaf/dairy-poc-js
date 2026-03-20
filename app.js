@@ -32,12 +32,10 @@ async function checkUser() {
     clearAuthCookie();
   }
 
-  // Run UI updates after session is determined
   updateUsernameDisplay();
   updateAvatarLink();
   updateNavPersonBg();
 }
-
 
 // ==========================================
 // HELPER FUNCTIONS
@@ -101,7 +99,6 @@ document.addEventListener('submit', async (e) => {
       if (btnTextEl) btnTextEl.innerText = originalBtnText;
       form.reset();
       showMessage(msgEl, "✅ Success! Please check your email to verify your account.");
-      // Hide message just before redirect
       setTimeout(() => {
         hideMessage(msgEl);
         window.location.href = '/login';
@@ -162,31 +159,19 @@ document.addEventListener('click', async (e) => {
     const minQty = parseInt(addBtn.getAttribute('data-product-min-quantity')) || 1;
     const price = (dPriceAttr && !isNaN(parseFloat(dPriceAttr))) ? parseFloat(dPriceAttr) : basePrice;
 
-    // --- Grab image from sibling thumbnail wrapper ---
+    // Grab image from sibling thumbnail wrapper
     let image = '';
-    const parent = addBtn.parentElement;
-    if (parent) {
-      // Search siblings and the wider product card for the thumbnail wrapper
-      const productCard = addBtn.closest('[data-product-id]')?.parentElement || parent;
-      const thumbnailWrapper = productCard.querySelector('[product-thumbnail="wrapper"]');
-      if (thumbnailWrapper) {
-        const imgEl = thumbnailWrapper.querySelector('[product-thumbnail="image"]');
-        if (imgEl) {
-          image = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
-        }
+    const productCard = addBtn.closest('[data-product-id]')?.parentElement || addBtn.parentElement;
+    const thumbnailWrapper = productCard.querySelector('[product-thumbnail="wrapper"]');
+    if (thumbnailWrapper) {
+      const imgEl = thumbnailWrapper.querySelector('[product-thumbnail="image"]');
+      if (imgEl) {
+        image = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
       }
     }
 
     addToCart({ id, name, image, price, quantity: minQty });
 
-    // Open cart
-    const cartWrapper = document.getElementById('cart-wrapper');
-    if (cartWrapper) cartWrapper.style.visibility = 'visible';
-    return;
-  }
-
-
-    // Open cart
     const cartWrapper = document.getElementById('cart-wrapper');
     if (cartWrapper) cartWrapper.style.visibility = 'visible';
     return;
@@ -256,10 +241,8 @@ document.addEventListener('click', async (e) => {
 // ==========================================
 // 5. E-COMMERCE & CART FUNCTIONS
 // ==========================================
-
-// Tax and shipping constants — update when ready
-const TAX_RATE = 0.00;       // e.g. 0.08 = 8%
-const SHIPPING_COST = 0.00;  // flat shipping cost
+const TAX_RATE = 0.00;
+const SHIPPING_COST = 0.00;
 
 function addToCart(product) {
   const existingItem = cart.find(item => item.id === product.id);
@@ -290,15 +273,12 @@ async function syncCartToDB() {
   if (error) console.error("Error syncing cart to DB:", error.message);
 }
 
-// Master template — the div#cart_item_wrap in your Webflow design
-// This gets cloned for each cart item
 let cartItemTemplate = null;
 
 function getCartTemplate() {
   if (cartItemTemplate) return cartItemTemplate;
   const template = document.getElementById('cart_item_wrap');
   if (!template) return null;
-  // Store and hide the original template
   cartItemTemplate = template.cloneNode(true);
   template.style.display = 'none';
   return cartItemTemplate;
@@ -313,7 +293,6 @@ function updateCartUI() {
 
   if (!template || !container) return;
 
-  // Remove all previously rendered cart items (not the hidden template)
   container.querySelectorAll('[data-cart-item-id]').forEach(el => el.remove());
 
   let subtotal = 0;
@@ -322,13 +301,12 @@ function updateCartUI() {
     const itemTotal = item.price * item.quantity;
     subtotal += itemTotal;
 
-    // Clone the template for this item
     const clone = template.cloneNode(true);
-    clone.removeAttribute('id'); // avoid duplicate IDs
+    clone.removeAttribute('id');
     clone.setAttribute('data-cart-item-id', item.id);
-    clone.style.display = ''; // make visible
+    clone.style.display = '';
 
-    // --- Product Image ---
+    // Product Image
     const imgEl = clone.querySelector('[item="image"]');
     if (imgEl && item.image) {
       if (imgEl.tagName === 'IMG') {
@@ -339,42 +317,37 @@ function updateCartUI() {
       }
     }
 
-    // --- Product Name ---
+    // Product Name
     const nameEl = clone.querySelector('[item="product-name"]');
     if (nameEl) nameEl.innerText = item.name;
 
-    // --- Single Item Price ---
+    // Single Item Price
     const singlePriceEl = clone.querySelector('[product-price="single-item"]');
     if (singlePriceEl) singlePriceEl.innerText = `৳${item.price.toFixed(2)}`;
 
-    // --- Quantity Input ---
+    // Quantity Input
     const qtyInput = clone.querySelector('input[product-quantity="min-one"]');
     if (qtyInput) {
       qtyInput.value = item.quantity;
       qtyInput.min = 1;
-      // Handle manual input change
       qtyInput.addEventListener('change', () => {
         const newQty = parseInt(qtyInput.value);
-        if (!isNaN(newQty) && newQty >= 1) {
-          item.quantity = newQty;
-        } else {
-          item.quantity = 1;
-          qtyInput.value = 1;
-        }
+        item.quantity = (!isNaN(newQty) && newQty >= 1) ? newQty : 1;
+        if (isNaN(newQty) || newQty < 1) qtyInput.value = 1;
         updateCartUI();
         saveCart();
       });
     }
 
-    // --- Item Total Price ---
+    // Item Total Price
     const itemTotalEl = clone.querySelector('[item-price="total"]');
     if (itemTotalEl) itemTotalEl.innerText = `৳${itemTotal.toFixed(2)}`;
 
-    // --- Remove Button ---
+    // Remove Button
     const removeBtn = clone.querySelector('[cart-item-remove]');
     if (removeBtn) removeBtn.setAttribute('cart-item-remove', item.id);
 
-    // --- Quantity Increase/Decrease Buttons ---
+    // Increase/Decrease Buttons
     const increaseBtn = clone.querySelector('[product-quantity-increase]');
     if (increaseBtn) increaseBtn.setAttribute('product-quantity-increase', item.id);
 
@@ -384,15 +357,15 @@ function updateCartUI() {
     container.appendChild(clone);
   });
 
-  // --- Subtotal ---
+  // Subtotal
   if (subtotalEl) subtotalEl.innerText = `৳${subtotal.toFixed(2)}`;
 
-  // --- Total (subtotal + tax + shipping) ---
+  // Total with tax and shipping
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax + SHIPPING_COST;
   if (totalEl) totalEl.innerText = `৳${total.toFixed(2)}`;
 
-  // --- Cart Count Badge ---
+  // Cart count badge
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   if (cartCountEl) cartCountEl.innerText = totalItems;
 }
@@ -403,126 +376,37 @@ window.removeFromCart = function(id) {
   saveCart();
 };
 
-
-// ==========================================
-// 5. E-COMMERCE & CART FUNCTIONS
-// ==========================================
-function addToCart(product) {
-  const existingItem = cart.find(item => item.id === product.id);
-  if (existingItem) {
-    existingItem.quantity += product.quantity;
-  } else {
-    cart.push(product);
-  }
-  updateCartUI();
-  saveCart();
-  const cartWrapper = document.getElementById('cart-wrapper');
-  if (cartWrapper) cartWrapper.style.display = 'block';
-}
-
-function saveCart() {
-  localStorage.setItem('dairy_cart', JSON.stringify(cart));
-  if (currentUser) syncCartToDB();
-}
-
-async function syncCartToDB() {
-  if (!currentUser) return;
-  await supabaseClient.from('cart_items').delete().eq('user_id', currentUser.id);
-  const dbCartItems = cart.map(item => ({
-    user_id: currentUser.id,
-    product_id: item.id,
-    quantity: item.quantity,
-    price: item.price
-  }));
-  const { error } = await supabaseClient.from('cart_items').insert(dbCartItems);
-  if (error) console.error("Error syncing cart to DB:", error.message);
-}
-
-function updateCartUI() {
-  const container = document.getElementById('cart-items-container');
-  const subtotalEl = document.getElementById('cart-subtotal-price');
-  const totalEl = document.getElementById('cart-total-price');
-
-  if (!container) return;
-  container.innerHTML = '';
-  let subtotal = 0;
-
-  cart.forEach((item, index) => {
-    subtotal += (item.price * item.quantity);
-    const itemDiv = document.createElement('div');
-    itemDiv.style.borderBottom = "1px solid #ccc";
-    itemDiv.style.paddingBottom = "10px";
-    itemDiv.style.marginBottom = "10px";
-    itemDiv.innerHTML = `
-      <strong>${item.name}</strong><br/>
-      ₹${item.price} x ${item.quantity}
-      <button onclick="removeFromCart(${index})" style="margin-left:10px;color:red;background:none;border:none;cursor:pointer;">Remove</button>
-    `;
-    container.appendChild(itemDiv);
-  });
-
-  if (subtotalEl) subtotalEl.innerText = `₹${subtotal}`;
-  if (totalEl) totalEl.innerText = `₹${subtotal}`;
-}
-
-window.removeFromCart = function(index) {
-  cart.splice(index, 1);
-  updateCartUI();
-  saveCart();
-};
-
-
 // ==========================================
 // 6. UI PERSONALIZATION
 // ==========================================
-
-// Replaces text of any element with username="fname" attribute
 function updateUsernameDisplay() {
   const usernameEl = getByAttr('username', 'fname');
   if (!usernameEl) return;
-
   if (currentUser) {
-    // Try full_name from metadata first, fallback to email prefix
-    const fullName = currentUser.user_metadata?.full_name
-      || currentUser.email.split('@')[0];
+    const fullName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
     usernameEl.innerText = fullName;
   } else {
     usernameEl.innerText = "Guest";
   }
 }
 
-// Makes avatar=login element a dynamic link:
-// - Guest → goes to /login
-// - Logged in → goes to /dashboard
 function updateAvatarLink() {
   const avatarEl = getByAttr('avatar', 'login');
   if (!avatarEl) return;
-
   avatarEl.style.cursor = 'pointer';
-
-  // Remove any previously attached listener to avoid duplicates
   avatarEl.replaceWith(avatarEl.cloneNode(true));
   const freshAvatarEl = getByAttr('avatar', 'login');
-
   freshAvatarEl.addEventListener('click', (e) => {
     e.preventDefault();
-    if (currentUser) {
-      window.location.href = '/dashboard';
-    } else {
-      window.location.href = '/login';
-    }
+    window.location.href = currentUser ? '/dashboard' : '/login';
   });
 }
 
-// Changes nav_person_bg color based on login state
 function updateNavPersonBg() {
-  const navBgEls = document.querySelectorAll('.nav_person_bg');
-  navBgEls.forEach(el => {
-    if (currentUser) {
-      el.style.color = 'var(--swatch--brand-500)';
-    } else {
-      el.style.color = 'var(--swatch--transparent)';
-    }
+  document.querySelectorAll('.nav_person_bg').forEach(el => {
+    el.style.color = currentUser
+      ? 'var(--swatch--brand-500)'
+      : 'var(--swatch--transparent)';
   });
 }
 
