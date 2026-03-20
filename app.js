@@ -22,23 +22,31 @@ function clearAuthCookie() {
 
 async function checkUser() {
   const { data: { session } } = await supabaseClient.auth.getSession();
+  const previousUser = currentUser;
   currentUser = session ? session.user : null;
   console.log("Current User:", currentUser ? currentUser.email : "Guest");
 
   if (currentUser) {
     setAuthCookie();
-    if (cart.length > 0) syncCartToDB();
+    if (!previousUser && cart.length > 0) {
+      // Guest just logged in with items in cart — merge
+      await mergeGuestCartToDB();
+    } else if (cart.length === 0) {
+      // Returning logged-in user with empty local cart — load from DB
+      await loadCartFromDB();
+    }
   } else {
     clearAuthCookie();
   }
 
-  updateUsernameDisplay();
+  await updateUsernameDisplay();
   updateAvatarLink();
   updateNavPersonBg();
+  updateCartUI();
 }
 
 // ==========================================
-// HELPER FUNCTIONS
+// 3. HELPER FUNCTIONS
 // ==========================================
 function getByAttr(attr, value) {
   return document.querySelector(`[${attr}="${value}"]`);
@@ -56,12 +64,25 @@ function hideMessage(msgEl) {
   msgEl.innerText = '';
 }
 
+function openCart() {
+  const cartWrapper = document.getElementById('cart-wrapper');
+  if (cartWrapper) {
+    cartWrapper.style.display = 'flex';
+    cartWrapper.style.flexDirection = 'column';
+  }
+}
+
+function closeCart() {
+  const cartWrapper = document.getElementById('cart-wrapper');
+  if (cartWrapper) cartWrapper.style.display = 'none';
+}
+
 // ==========================================
-// 3. AUTHENTICATION (FORM SUBMITS)
+// 4. AUTHENTICATION (FORM SUBMITS)
 // ==========================================
 document.addEventListener('submit', async (e) => {
 
-  // --- SIGN UP FLOW ---
+  // --- SIGN UP ---
   if (e.target.closest('#signup-form')) {
     e.preventDefault();
     const form = e.target;
@@ -107,7 +128,7 @@ document.addEventListener('submit', async (e) => {
     return;
   }
 
-  // --- SIGN IN FLOW ---
+  // --- SIGN IN ---
   if (e.target.closest('#login-form')) {
     e.preventDefault();
     const form = e.target;
@@ -133,7 +154,14 @@ document.addEventListener('submit', async (e) => {
       showMessage(msgEl, "✅ Login successful! Redirecting...");
       currentUser = data.user;
       setAuthCookie();
-      await syncCartToDB();
+
+      // Merge guest cart if any items exist
+      if (cart.length > 0) {
+        await mergeGuestCartToDB();
+      } else {
+        await loadCartFromDB();
+      }
+
       setTimeout(() => {
         hideMessage(msgEl);
         window.location.href = '/dashboard';
@@ -144,7 +172,7 @@ document.addEventListener('submit', async (e) => {
 });
 
 // ==========================================
-// 4. E-COMMERCE & CART LOGIC (CLICKS)
+// 5. CLICK HANDLER
 // ==========================================
 document.addEventListener('click', async (e) => {
 
@@ -152,6 +180,7 @@ document.addEventListener('click', async (e) => {
   const addBtn = e.target.closest('[data-product-id]');
   if (addBtn && !e.target.closest('#cart-wrapper')) {
     e.preventDefault();
+
     const id = addBtn.getAttribute('data-product-id');
     const name = addBtn.getAttribute('data-product-name');
     const basePrice = parseFloat(addBtn.getAttribute('data-product-price'));
@@ -171,9 +200,7 @@ document.addEventListener('click', async (e) => {
     }
 
     addToCart({ id, name, image, price, quantity: minQty });
-
-    const cartWrapper = document.getElementById('cart-wrapper');
-    if (cartWrapper) cartWrapper.style.visibility = 'visible';
+    openCart();
     return;
   }
 
@@ -181,17 +208,15 @@ document.addEventListener('click', async (e) => {
   const openCartBtn = e.target.closest('#open-cart-btn');
   if (openCartBtn) {
     e.preventDefault();
-    const cartWrapper = document.getElementById('cart-wrapper');
-    if (cartWrapper) cartWrapper.style.visibility = 'visible';
+    openCart();
     return;
   }
 
-  // --- CLOSE CART MODAL ---
+  // --- CLOSE CART ---
   const closeBtn = e.target.closest('#modal-close');
   if (closeBtn) {
     e.preventDefault();
-    const cartWrapper = document.getElementById('cart-wrapper');
-    if (cartWrapper) cartWrapper.style.visibility = 'hidden';
+    closeCart();
     return;
   }
 
@@ -225,7 +250,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // --- REMOVE ITEM ---
+  // --- REMOVE CART ITEM ---
   const removeBtn = e.target.closest('[cart-item-remove]');
   if (removeBtn) {
     const itemId = removeBtn.closest('[data-cart-item-id]')?.getAttribute('data-cart-item-id');
@@ -239,7 +264,7 @@ document.addEventListener('click', async (e) => {
 });
 
 // ==========================================
-// 5. E-COMMERCE & CART FUNCTIONS
+// 6. CART FUNCTIONS
 // ==========================================
 const TAX_RATE = 0.00;
 const SHIPPING_COST = 0.00;
@@ -266,11 +291,72 @@ async function syncCartToDB() {
   const dbCartItems = cart.map(item => ({
     user_id: currentUser.id,
     product_id: item.id,
+    name: item.name,
+    image: item.image,
     quantity: item.quantity,
     price: item.price
   }));
   const { error } = await supabaseClient.from('cart_items').insert(dbCartItems);
-  if (error) console.error("Error syncing cart to DB:", error.message);
+  if (error) console.error("Error syncing cart:", error.message);
+}
+
+async function loadCartFromDB() {
+  if (!currentUser) return;
+  const { data, error } = await supabaseClient
+    .from('cart_items')
+    .select('*')
+    .eq('user_id', currentUser.id);
+
+  if (error) { console.error("Error loading cart:", error.message); return; }
+
+  if (data && data.length > 0) {
+    cart = data.map(row => ({
+      id: row.product_id,
+      name: row.name || '',
+      image: row.image || '',
+      price: row.price,
+      quantity: row.quantity
+    }));
+    localStorage.setItem('dairy_cart', JSON.stringify(cart));
+    updateCartUI();
+    console.log("Cart loaded from DB:", cart.length, "items");
+  }
+}
+
+async function mergeGuestCartToDB() {
+  if (!currentUser) return;
+
+  const { data: dbCart, error } = await supabaseClient
+    .from('cart_items')
+    .select('*')
+    .eq('user_id', currentUser.id);
+
+  if (error) { console.error("Error fetching DB cart:", error.message); return; }
+
+  const mergedCart = [...cart];
+
+  if (dbCart && dbCart.length > 0) {
+    dbCart.forEach(dbItem => {
+      const localItem = mergedCart.find(i => i.id === dbItem.product_id);
+      if (localItem) {
+        localItem.quantity += dbItem.quantity;
+      } else {
+        mergedCart.push({
+          id: dbItem.product_id,
+          name: dbItem.name || '',
+          image: dbItem.image || '',
+          price: dbItem.price,
+          quantity: dbItem.quantity
+        });
+      }
+    });
+  }
+
+  cart = mergedCart;
+  localStorage.setItem('dairy_cart', JSON.stringify(cart));
+  await syncCartToDB();
+  updateCartUI();
+  console.log("Cart merged:", cart.length, "items");
 }
 
 let cartItemTemplate = null;
@@ -293,6 +379,7 @@ function updateCartUI() {
 
   if (!template || !container) return;
 
+  // Clear previously rendered items
   container.querySelectorAll('[data-cart-item-id]').forEach(el => el.remove());
 
   let subtotal = 0;
@@ -306,7 +393,7 @@ function updateCartUI() {
     clone.setAttribute('data-cart-item-id', item.id);
     clone.style.display = '';
 
-    // Product Image
+    // Image
     const imgEl = clone.querySelector('[item="image"]');
     if (imgEl && item.image) {
       if (imgEl.tagName === 'IMG') {
@@ -317,15 +404,15 @@ function updateCartUI() {
       }
     }
 
-    // Product Name
+    // Name
     const nameEl = clone.querySelector('[item="product-name"]');
     if (nameEl) nameEl.innerText = item.name;
 
-    // Single Item Price
+    // Single price
     const singlePriceEl = clone.querySelector('[product-price="single-item"]');
     if (singlePriceEl) singlePriceEl.innerText = `৳${item.price.toFixed(2)}`;
 
-    // Quantity Input
+    // Quantity input
     const qtyInput = clone.querySelector('input[product-quantity="min-one"]');
     if (qtyInput) {
       qtyInput.value = item.quantity;
@@ -339,20 +426,19 @@ function updateCartUI() {
       });
     }
 
-    // Item Total Price
+    // Item total
     const itemTotalEl = clone.querySelector('[item-price="total"]');
     if (itemTotalEl) itemTotalEl.innerText = `৳${itemTotal.toFixed(2)}`;
 
-    // Remove Button
-    const removeBtn = clone.querySelector('[cart-item-remove]');
-    if (removeBtn) removeBtn.setAttribute('cart-item-remove', item.id);
+    // Buttons
+    const rmBtn = clone.querySelector('[cart-item-remove]');
+    if (rmBtn) rmBtn.setAttribute('cart-item-remove', item.id);
 
-    // Increase/Decrease Buttons
-    const increaseBtn = clone.querySelector('[product-quantity-increase]');
-    if (increaseBtn) increaseBtn.setAttribute('product-quantity-increase', item.id);
+    const incBtn = clone.querySelector('[product-quantity-increase]');
+    if (incBtn) incBtn.setAttribute('product-quantity-increase', item.id);
 
-    const decreaseBtn = clone.querySelector('[product-quantity-decrease]');
-    if (decreaseBtn) decreaseBtn.setAttribute('product-quantity-decrease', item.id);
+    const decBtn = clone.querySelector('[product-quantity-decrease]');
+    if (decBtn) decBtn.setAttribute('product-quantity-decrease', item.id);
 
     container.appendChild(clone);
   });
@@ -360,12 +446,12 @@ function updateCartUI() {
   // Subtotal
   if (subtotalEl) subtotalEl.innerText = `৳${subtotal.toFixed(2)}`;
 
-  // Total with tax and shipping
+  // Total
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax + SHIPPING_COST;
   if (totalEl) totalEl.innerText = `৳${total.toFixed(2)}`;
 
-  // Cart count badge
+  // Cart badge count
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   if (cartCountEl) cartCountEl.innerText = totalItems;
 }
@@ -377,13 +463,32 @@ window.removeFromCart = function(id) {
 };
 
 // ==========================================
-// 6. UI PERSONALIZATION
+// 7. UI PERSONALIZATION
 // ==========================================
-function updateUsernameDisplay() {
+
+// PROFILE FUNCTIONS
+async function getUserProfile() {
+  if (!currentUser) return null;
+  const { data, error } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', currentUser.id)
+    .single();
+
+  if (error) { console.error("Error fetching profile:", error.message); return null; }
+  return data;
+}
+
+async function updateUsernameDisplay() {
   const usernameEl = getByAttr('username', 'fname');
   if (!usernameEl) return;
+
   if (currentUser) {
-    const fullName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+    // First try getting name from profiles table (most accurate)
+    const profile = await getUserProfile();
+    const fullName = profile?.full_name
+      || currentUser.user_metadata?.full_name
+      || currentUser.email.split('@')[0];
     usernameEl.innerText = fullName;
   } else {
     usernameEl.innerText = "Guest";
