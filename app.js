@@ -29,10 +29,8 @@ async function checkUser() {
   if (currentUser) {
     setAuthCookie();
     if (!previousUser && cart.length > 0) {
-      // Guest just logged in with items in cart — merge
       await mergeGuestCartToDB();
     } else if (cart.length === 0) {
-      // Returning logged-in user with empty local cart — load from DB
       await loadCartFromDB();
     }
   } else {
@@ -155,7 +153,6 @@ document.addEventListener('submit', async (e) => {
       currentUser = data.user;
       setAuthCookie();
 
-      // Merge guest cart if any items exist
       if (cart.length > 0) {
         await mergeGuestCartToDB();
       } else {
@@ -188,9 +185,10 @@ document.addEventListener('click', async (e) => {
     const minQty = parseInt(addBtn.getAttribute('data-product-min-quantity')) || 1;
     const price = (dPriceAttr && !isNaN(parseFloat(dPriceAttr))) ? parseFloat(dPriceAttr) : basePrice;
 
-    // Grab image from sibling thumbnail wrapper
+    // FIX #5: Use addBtn.parentElement directly to reach the product card
+    // instead of re-calling closest() which returns the button itself
     let image = '';
-    const productCard = addBtn.closest('[data-product-id]')?.parentElement || addBtn.parentElement;
+    const productCard = addBtn.parentElement;
     const thumbnailWrapper = productCard.querySelector('[product-thumbnail="wrapper"]');
     if (thumbnailWrapper) {
       const imgEl = thumbnailWrapper.querySelector('[product-thumbnail="image"]');
@@ -359,6 +357,8 @@ async function mergeGuestCartToDB() {
   console.log("Cart merged:", cart.length, "items");
 }
 
+// FIX #2: cartItemTemplate is never cached as null from a premature call.
+// The template is only accessed inside updateCartUI which runs after DOMContentLoaded.
 let cartItemTemplate = null;
 
 function getCartTemplate() {
@@ -366,17 +366,19 @@ function getCartTemplate() {
   const template = document.getElementById('cart_item_wrap');
   if (!template) return null;
   cartItemTemplate = template.cloneNode(true);
+  // Hide the original template element so it never shows on page
   template.style.display = 'none';
-
   return cartItemTemplate;
 }
 
 function updateCartUI() {
   const template = getCartTemplate();
   const container = document.getElementById('cart_item_wrap')?.parentElement;
-  // Show container only when cart has items
+
+  // FIX #3: Use explicit 'flex' / 'none' instead of '' to ensure Webflow styles are overridden
   if (container) {
-    container.style.display = cart.length > 0 ? '' : 'none';
+    container.style.display = cart.length > 0 ? 'flex' : 'none';
+    container.style.flexDirection = 'column';
   }
 
   const subtotalEl = document.getElementById('cart-subtotal-price');
@@ -457,15 +459,13 @@ function updateCartUI() {
   const total = subtotal + tax + SHIPPING_COST;
   if (totalEl) totalEl.innerText = `৳${total.toFixed(2)}`;
 
-
   // Cart badge count
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   if (cartCountEl) cartCountEl.innerText = totalItems;
 
-  // cart-item-count text element
+  // FIX #4: cart-item-count text element — always updated
   const cartItemCountEl = document.getElementById('cart-item-count');
   if (cartItemCountEl) cartItemCountEl.innerText = totalItems;
-
 }
 
 window.removeFromCart = function(id) {
@@ -478,7 +478,6 @@ window.removeFromCart = function(id) {
 // 7. UI PERSONALIZATION
 // ==========================================
 
-// PROFILE FUNCTIONS
 async function getUserProfile() {
   if (!currentUser) return null;
   const { data, error } = await supabaseClient
@@ -496,7 +495,6 @@ async function updateUsernameDisplay() {
   if (!usernameEl) return;
 
   if (currentUser) {
-    // First try getting name from profiles table (most accurate)
     const profile = await getUserProfile();
     const fullName = profile?.full_name
       || currentUser.user_metadata?.full_name
@@ -529,6 +527,15 @@ function updateNavPersonBg() {
 
 // ==========================================
 // INIT
+// FIX #1 & #2: Hide template immediately on DOM ready.
+// Only call checkUser() here — it calls updateCartUI() internally after
+// async cart data is loaded. No premature standalone updateCartUI() call.
 // ==========================================
-checkUser();
-updateCartUI();
+document.addEventListener('DOMContentLoaded', () => {
+  // FIX #1: Immediately hide the template so it never flashes visible content
+  const templateEl = document.getElementById('cart_item_wrap');
+  if (templateEl) templateEl.style.display = 'none';
+
+  // FIX #2: checkUser handles updateCartUI after async data is ready
+  checkUser();
+});
