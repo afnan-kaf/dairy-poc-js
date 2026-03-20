@@ -62,7 +62,6 @@ function hideMessage(msgEl) {
   msgEl.innerText = '';
 }
 
-// FIX: cart-wrapper is the modal div — only toggle display on this, nothing else
 function openCart() {
   const cartWrapper = document.getElementById('cart-wrapper');
   if (cartWrapper) cartWrapper.style.display = 'block';
@@ -183,15 +182,32 @@ document.addEventListener('click', async (e) => {
     const minQty = parseInt(addBtn.getAttribute('data-product-min-quantity')) || 1;
     const price = (dPriceAttr && !isNaN(parseFloat(dPriceAttr))) ? parseFloat(dPriceAttr) : basePrice;
 
-    // FIX #5: Use addBtn.parentElement to correctly reach the product card
+    // FIX IMAGE GRABBING:
+    // Strategy 1: look for product-thumbnail="wrapper" anywhere above the button (Best Selling section)
+    // Strategy 2: look for product-thumbnail="image" directly anywhere in the card (Flash Sale / Explore sections)
+    // Strategy 3: any img inside .slider_product_image_wrap as final fallback
     let image = '';
-    const productCard = addBtn.parentElement;
-    const thumbnailWrapper = productCard.querySelector('[product-thumbnail="wrapper"]');
-    if (thumbnailWrapper) {
-      const imgEl = thumbnailWrapper.querySelector('[product-thumbnail="image"]');
-      if (imgEl) {
-        image = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
-      }
+
+    const card = addBtn.closest('.slider_card_wrap, .bestsellingcardwrap, .slider-card-wrap')
+                 || addBtn.parentElement;
+
+    // Strategy 1: wrapper attribute exists on the image container div
+    const thumbWrapper = card.querySelector('[product-thumbnail="wrapper"]');
+    if (thumbWrapper) {
+      const imgEl = thumbWrapper.querySelector('[product-thumbnail="image"]');
+      if (imgEl) image = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
+    }
+
+    // Strategy 2: image attribute directly on the img element (no wrapper)
+    if (!image) {
+      const directImg = card.querySelector('[product-thumbnail="image"]');
+      if (directImg) image = directImg.getAttribute('src') || directImg.getAttribute('data-src') || '';
+    }
+
+    // Strategy 3: fallback — grab the first img inside the image wrapper div
+    if (!image) {
+      const fallbackImg = card.querySelector('.slider_product_image_wrap img, .sliderproductimagewrap img');
+      if (fallbackImg) image = fallbackImg.getAttribute('src') || fallbackImg.getAttribute('data-src') || '';
     }
 
     addToCart({ id, name, image, price, quantity: minQty });
@@ -356,34 +372,27 @@ async function mergeGuestCartToDB() {
 
 // ==========================================
 // CART TEMPLATE & UI
-// FIX: HTML uses id="cart-item-wrap" (dashes), not "cart_item_wrap" (underscores)
-// FIX: Only the original template is hidden — container display is never touched
 // ==========================================
 let cartItemTemplate = null;
 
 function getCartTemplate() {
-  // FIX: Correct ID with dashes to match actual HTML element
   const template = document.getElementById('cart-item-wrap');
   if (!template) return null;
 
   if (!cartItemTemplate) {
-    // Clone and store the template before hiding the original
     cartItemTemplate = template.cloneNode(true);
     cartItemTemplate.removeAttribute('id');
   }
 
-  // Always keep the original template hidden
   template.style.display = 'none';
   return cartItemTemplate;
 }
 
 function updateCartUI() {
-  // FIX: Correct ID with dashes
   const originalTemplate = document.getElementById('cart-item-wrap');
   if (originalTemplate) originalTemplate.style.display = 'none';
 
   const template = getCartTemplate();
-  // FIX: Container is the parentElement of the template element
   const container = originalTemplate ? originalTemplate.parentElement : null;
 
   const subtotalEl = document.getElementById('cart-subtotal-price');
@@ -392,7 +401,6 @@ function updateCartUI() {
 
   if (!template || !container) return;
 
-  // Remove only previously cloned dynamic items — original template is already hidden above
   container.querySelectorAll('[data-cart-item-id]').forEach(el => el.remove());
 
   let subtotal = 0;
@@ -453,6 +461,26 @@ function updateCartUI() {
     const decBtn = clone.querySelector('[product-quantity-decrease]');
     if (decBtn) decBtn.setAttribute('product-quantity-decrease', item.id);
 
+    // FIX HOVER: Webflow IX2 doesn't fire on cloned nodes.
+    // Manually replicate the show/hide behavior on cart_item_name_wrap hover.
+    const nameWrap = clone.querySelector('.cart_item_name_wrap');
+    if (nameWrap && rmBtn) {
+      // Start hidden
+      rmBtn.style.transition = 'opacity 0.2s ease';
+      rmBtn.style.opacity = '0';
+      rmBtn.style.pointerEvents = 'none';
+
+      nameWrap.addEventListener('mouseenter', () => {
+        rmBtn.style.opacity = '1';
+        rmBtn.style.pointerEvents = 'auto';
+      });
+
+      nameWrap.addEventListener('mouseleave', () => {
+        rmBtn.style.opacity = '0';
+        rmBtn.style.pointerEvents = 'none';
+      });
+    }
+
     container.appendChild(clone);
   });
 
@@ -468,7 +496,6 @@ function updateCartUI() {
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   if (cartCountEl) cartCountEl.innerText = totalItems;
 
-  // cart-item-count text element
   const cartItemCountEl = document.getElementById('cart-item-count');
   if (cartItemCountEl) cartItemCountEl.innerText = totalItems;
 }
@@ -531,11 +558,8 @@ function updateNavPersonBg() {
 
 // ==========================================
 // INIT
-// FIX: Run everything inside DOMContentLoaded so the DOM is ready
-// FIX: No standalone updateCartUI() call — checkUser() handles it after async data loads
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Hide the template element immediately so it never shows placeholder content
   const templateEl = document.getElementById('cart-item-wrap');
   if (templateEl) templateEl.style.display = 'none';
 
