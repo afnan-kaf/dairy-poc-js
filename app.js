@@ -451,9 +451,15 @@ function updateCartUI() {
   const total = subtotal + tax + SHIPPING_COST;
   if (totalEl) totalEl.innerText = `৳${total.toFixed(2)}`;
 
+
   // Cart badge count
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   if (cartCountEl) cartCountEl.innerText = totalItems;
+
+  // cart-item-count text element
+  const cartItemCountEl = document.getElementById('cart-item-count');
+  if (cartItemCountEl) cartItemCountEl.innerText = totalItems;
+
 }
 
 window.removeFromCart = function(id) {
