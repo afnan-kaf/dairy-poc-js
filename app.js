@@ -62,12 +62,10 @@ function hideMessage(msgEl) {
   msgEl.innerText = '';
 }
 
+// FIX: cart-wrapper is the modal div — only toggle display on this, nothing else
 function openCart() {
   const cartWrapper = document.getElementById('cart-wrapper');
-  if (cartWrapper) {
-    cartWrapper.style.display = 'flex';
-    cartWrapper.style.flexDirection = 'column';
-  }
+  if (cartWrapper) cartWrapper.style.display = 'block';
 }
 
 function closeCart() {
@@ -185,8 +183,7 @@ document.addEventListener('click', async (e) => {
     const minQty = parseInt(addBtn.getAttribute('data-product-min-quantity')) || 1;
     const price = (dPriceAttr && !isNaN(parseFloat(dPriceAttr))) ? parseFloat(dPriceAttr) : basePrice;
 
-    // FIX #5: Use addBtn.parentElement directly to reach the product card
-    // instead of re-calling closest() which returns the button itself
+    // FIX #5: Use addBtn.parentElement to correctly reach the product card
     let image = '';
     const productCard = addBtn.parentElement;
     const thumbnailWrapper = productCard.querySelector('[product-thumbnail="wrapper"]');
@@ -357,29 +354,37 @@ async function mergeGuestCartToDB() {
   console.log("Cart merged:", cart.length, "items");
 }
 
-// FIX #2: cartItemTemplate is never cached as null from a premature call.
-// The template is only accessed inside updateCartUI which runs after DOMContentLoaded.
+// ==========================================
+// CART TEMPLATE & UI
+// FIX: HTML uses id="cart-item-wrap" (dashes), not "cart_item_wrap" (underscores)
+// FIX: Only the original template is hidden — container display is never touched
+// ==========================================
 let cartItemTemplate = null;
 
 function getCartTemplate() {
-  if (cartItemTemplate) return cartItemTemplate;
-  const template = document.getElementById('cart_item_wrap');
+  // FIX: Correct ID with dashes to match actual HTML element
+  const template = document.getElementById('cart-item-wrap');
   if (!template) return null;
-  cartItemTemplate = template.cloneNode(true);
-  // Hide the original template element so it never shows on page
+
+  if (!cartItemTemplate) {
+    // Clone and store the template before hiding the original
+    cartItemTemplate = template.cloneNode(true);
+    cartItemTemplate.removeAttribute('id');
+  }
+
+  // Always keep the original template hidden
   template.style.display = 'none';
   return cartItemTemplate;
 }
 
 function updateCartUI() {
-  const template = getCartTemplate();
-  const container = document.getElementById('cart_item_wrap')?.parentElement;
+  // FIX: Correct ID with dashes
+  const originalTemplate = document.getElementById('cart-item-wrap');
+  if (originalTemplate) originalTemplate.style.display = 'none';
 
-  // FIX #3: Use explicit 'flex' / 'none' instead of '' to ensure Webflow styles are overridden
-  if (container) {
-    container.style.display = cart.length > 0 ? 'flex' : 'none';
-    container.style.flexDirection = 'column';
-  }
+  const template = getCartTemplate();
+  // FIX: Container is the parentElement of the template element
+  const container = originalTemplate ? originalTemplate.parentElement : null;
 
   const subtotalEl = document.getElementById('cart-subtotal-price');
   const totalEl = document.getElementById('cart-total-price');
@@ -387,7 +392,7 @@ function updateCartUI() {
 
   if (!template || !container) return;
 
-  // Clear previously rendered items
+  // Remove only previously cloned dynamic items — original template is already hidden above
   container.querySelectorAll('[data-cart-item-id]').forEach(el => el.remove());
 
   let subtotal = 0;
@@ -463,7 +468,7 @@ function updateCartUI() {
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   if (cartCountEl) cartCountEl.innerText = totalItems;
 
-  // FIX #4: cart-item-count text element — always updated
+  // cart-item-count text element
   const cartItemCountEl = document.getElementById('cart-item-count');
   if (cartItemCountEl) cartItemCountEl.innerText = totalItems;
 }
@@ -477,7 +482,6 @@ window.removeFromCart = function(id) {
 // ==========================================
 // 7. UI PERSONALIZATION
 // ==========================================
-
 async function getUserProfile() {
   if (!currentUser) return null;
   const { data, error } = await supabaseClient
@@ -527,15 +531,13 @@ function updateNavPersonBg() {
 
 // ==========================================
 // INIT
-// FIX #1 & #2: Hide template immediately on DOM ready.
-// Only call checkUser() here — it calls updateCartUI() internally after
-// async cart data is loaded. No premature standalone updateCartUI() call.
+// FIX: Run everything inside DOMContentLoaded so the DOM is ready
+// FIX: No standalone updateCartUI() call — checkUser() handles it after async data loads
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-  // FIX #1: Immediately hide the template so it never flashes visible content
-  const templateEl = document.getElementById('cart_item_wrap');
+  // Hide the template element immediately so it never shows placeholder content
+  const templateEl = document.getElementById('cart-item-wrap');
   if (templateEl) templateEl.style.display = 'none';
 
-  // FIX #2: checkUser handles updateCartUI after async data is ready
   checkUser();
 });
