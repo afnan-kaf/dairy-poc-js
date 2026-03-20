@@ -65,12 +65,15 @@ function hideMessage(msgEl) {
 function openCart() {
   const cartWrapper = document.getElementById('cart-wrapper');
   if (cartWrapper) cartWrapper.style.display = 'block';
+  document.body.style.overflow = 'hidden';  // lock body scroll
 }
 
 function closeCart() {
   const cartWrapper = document.getElementById('cart-wrapper');
   if (cartWrapper) cartWrapper.style.display = 'none';
+  document.body.style.overflow = '';  // restore body scroll
 }
+
 
 // ==========================================
 // 4. AUTHENTICATION (FORM SUBMITS)
