@@ -31,7 +31,13 @@ async function checkUser() {
   } else {
     clearAuthCookie();
   }
+
+  // Run UI updates after session is determined
+  updateUsernameDisplay();
+  updateAvatarLink();
+  updateNavPersonBg();
 }
+
 
 // ==========================================
 // HELPER FUNCTIONS
@@ -235,6 +241,61 @@ window.removeFromCart = function(index) {
   updateCartUI();
   saveCart();
 };
+
+
+// ==========================================
+// 6. UI PERSONALIZATION
+// ==========================================
+
+// Replaces text of any element with username="fname" attribute
+function updateUsernameDisplay() {
+  const usernameEl = getByAttr('username', 'fname');
+  if (!usernameEl) return;
+
+  if (currentUser) {
+    // Try full_name from metadata first, fallback to email prefix
+    const fullName = currentUser.user_metadata?.full_name
+      || currentUser.email.split('@')[0];
+    usernameEl.innerText = fullName;
+  } else {
+    usernameEl.innerText = "Guest";
+  }
+}
+
+// Makes avatar=login element a dynamic link:
+// - Guest → goes to /login
+// - Logged in → goes to /dashboard
+function updateAvatarLink() {
+  const avatarEl = getByAttr('avatar', 'login');
+  if (!avatarEl) return;
+
+  avatarEl.style.cursor = 'pointer';
+
+  // Remove any previously attached listener to avoid duplicates
+  avatarEl.replaceWith(avatarEl.cloneNode(true));
+  const freshAvatarEl = getByAttr('avatar', 'login');
+
+  freshAvatarEl.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (currentUser) {
+      window.location.href = '/dashboard';
+    } else {
+      window.location.href = '/login';
+    }
+  });
+}
+
+// Changes nav_person_bg color based on login state
+function updateNavPersonBg() {
+  const navBgEls = document.querySelectorAll('.nav_person_bg');
+  navBgEls.forEach(el => {
+    if (currentUser) {
+      el.style.color = 'var(--swatch--brand-500)';
+    } else {
+      el.style.color = 'var(--swatch--transparent)';
+    }
+  });
+}
 
 // ==========================================
 // INIT
