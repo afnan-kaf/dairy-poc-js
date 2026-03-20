@@ -367,12 +367,18 @@ function getCartTemplate() {
   if (!template) return null;
   cartItemTemplate = template.cloneNode(true);
   template.style.display = 'none';
+
   return cartItemTemplate;
 }
 
 function updateCartUI() {
   const template = getCartTemplate();
   const container = document.getElementById('cart_item_wrap')?.parentElement;
+  // Show container only when cart has items
+  if (container) {
+    container.style.display = cart.length > 0 ? '' : 'none';
+  }
+
   const subtotalEl = document.getElementById('cart-subtotal-price');
   const totalEl = document.getElementById('cart-total-price');
   const cartCountEl = document.querySelector('.cart_item_count_number');
